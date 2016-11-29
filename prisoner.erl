@@ -36,7 +36,7 @@ getState(PID)->
 
 
 % stores a prisoner
--spec prisoner(tuple())->fun().
+-spec prisoner(tuple())->none().
 prisoner({Name,Strategy,State})->
       receive
             {Sender, name} ->
