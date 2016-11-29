@@ -37,7 +37,7 @@ run(SupervisorPID,Iterations)->
 
 
 % keeps track of the prisoners and the interactions
--spec supervisor(tuple())->fun().
+-spec supervisor(tuple())->none().
 supervisor({PrisonerList,Summary,History})->
       receive
             {Sender,add,PID}->
@@ -53,7 +53,7 @@ supervisor({PrisonerList,Summary,History})->
       end.
 
 % runs the interaction between prisoners N times
--spec iterate(list(), list(), list(), integer())->fun().
+-spec iterate(list(), list(), list(), integer())->none().
 iterate(_,Summary,History,0)->
       {Summary,History};
 
@@ -62,7 +62,7 @@ iterate(Prisoners,Summary,History,N) ->
       iterate(Prisoners,NewSummary,NewHistory,N-1).
 
 % executes each interaction between prisoners once
--spec doOneRun(list(), list(), list())->fun().
+-spec doOneRun(list(), list(), list())->none().
 doOneRun([],Summary,History)->
       {Summary,History};
 doOneRun([First|Rest],Summary,History) ->
@@ -70,7 +70,7 @@ doOneRun([First|Rest],Summary,History) ->
       doOneRun(Rest,NewSummary,NewHistory).
 
 % executes the interaction
--spec doOnce(pid(), list(), list(), list())->fun().
+-spec doOnce(pid(), list(), list(), list())->none().
 doOnce(_,[],Summary,History)->
       {Summary,History};
 doOnce(Agent,[OtherAgent|Rest],Summary,History) ->
