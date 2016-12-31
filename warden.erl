@@ -21,8 +21,8 @@ add(SupervisorPID,PID)->
 stats(SupervisorPID)->
       SupervisorPID!{self(),stats},
       receive
-            {SupervisorPID,State} ->
-                  State
+            {SupervisorPID,Summary} ->
+                  Summary
       end.
 
 % runs the interactions with each prisoner N times
@@ -44,7 +44,7 @@ supervisor({PrisonerList,Summary,History})->
                   Sender!{self(),done,length(PrisonerList)+1},
                   supervisor({[PID|PrisonerList],Summary,History});
             {Sender,stats} ->
-                  Sender!{self(),History},
+                  Sender!{self(),Summary},
                   supervisor({PrisonerList,Summary,History});
             {Sender,run,Count} ->
                   {NewSummary,NewHistory}=iterate(PrisonerList,Summary,History,Count),
@@ -96,4 +96,34 @@ doOnce(Agent,[OtherAgent|Rest],Summary,History) ->
       end,
       OtherAgent!{self(),result,MyChoice},
       Agent!{self(),result,OtherChoice},
-      doOnce(Agent,Rest,Summary,[{MyName,MyChoice,OtherName,OtherChoice}|History]).
+      NewSummary = recordScore({MyChoice, OtherChoice},MyName, Summary, []),
+      NewerSummary = recordScore({OtherChoice, MyChoice},OtherName, NewSummary, []),
+      doOnce(Agent,Rest,NewerSummary,[{MyName,MyChoice,OtherName,OtherChoice}|History]).
+
+% Filters the summary list and calculates the sentance
+-spec recordScore(tuple(), atom(), list(), list())->list().
+recordScore(CurrentInteraction, MyName, [], [])->
+      MyPrisonSentance = calculateSentence(CurrentInteraction, 0),
+      [{MyName,MyPrisonSentance}];
+recordScore(CurrentInteraction, MyName, [], Summary)->
+      MyPrisonSentance = calculateSentence(CurrentInteraction, 0),
+      [{MyName,MyPrisonSentance}|Summary];
+recordScore(CurrentInteraction, MyName, [{PrisonerName, PrisonSentance}|Rest], Accumulator) when PrisonerName == MyName->
+      MyPrisonSentance = calculateSentence(CurrentInteraction, PrisonSentance),
+      [{MyName,MyPrisonSentance}|lists:append(Accumulator, Rest)];
+recordScore(CurrentInteraction, MyName, [First|Rest], Accumulator)->
+      recordScore(CurrentInteraction, MyName, Rest, [First|Accumulator]).
+
+% Calculates the length of the sentence
+-spec calculateSentence(tuple(), integer())->integer().
+calculateSentence(CurrentInteraction, MyPrisonSentance) ->
+      case CurrentInteraction of
+            {coop, defect} ->
+                  MyPrisonSentance;
+            {defect, defect} ->
+                  MyPrisonSentance + 1;
+            {coop, coop} ->
+                  MyPrisonSentance + 2;
+            {defect, coop} ->
+                  MyPrisonSentance + 3
+      end.
