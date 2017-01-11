@@ -4,6 +4,7 @@
 % creates a supervisor
 -spec start(list())->pid().
 start(State)->
+      ets:new(summary, [set, named_table, public]),
       PID=spawn(?MODULE, supervisor, [State]),
       PID.
 
@@ -38,42 +39,49 @@ run(SupervisorPID,Iterations)->
 
 % keeps track of the prisoners and the interactions
 -spec supervisor(tuple())->none().
-supervisor({PrisonerList,Summary,History})->
+supervisor({PrisonerList,History})->
       receive
             {Sender,add,PID}->
                   Sender!{self(),done,length(PrisonerList)+1},
-                  supervisor({[PID|PrisonerList],Summary,History});
+                  supervisor({[PID|PrisonerList],History});
             {Sender,stats} ->
-                  Sender!{self(),Summary},
-                  supervisor({PrisonerList,Summary,History});
+                  Sender!{self(),createList(ets:first(summary), [])},
+                  supervisor({PrisonerList,History});
             {Sender,run,Count} ->
-                  {NewSummary,NewHistory}=iterate(PrisonerList,Summary,History,Count),
+                  {NewHistory}=iterate(PrisonerList,History,Count),
                   Sender!{self(),done},
-                  supervisor({PrisonerList,NewSummary,NewHistory})
+                  supervisor({PrisonerList,NewHistory})
       end.
 
-% runs the interaction between prisoners N times
--spec iterate(list(), list(), list(), integer())->none().
-iterate(_,Summary,History,0)->
-      {Summary,History};
+% creates a list from ets
+-spec createList(atom(), list())->list().
+createList(Name, List) when Name == '$end_of_table' ->
+      lists:append(List);
+createList(Name, List) ->
+      createList(ets:next(summary, Name), [ets:lookup(summary, Name)|List]).
 
-iterate(Prisoners,Summary,History,N) ->
-      {NewSummary,NewHistory}=doOneRun(Prisoners,Summary,History),
-      iterate(Prisoners,NewSummary,NewHistory,N-1).
+% runs the interaction between prisoners N times
+-spec iterate(list(), list(), integer())->none().
+iterate(_,History,0)->
+      {History};
+
+iterate(Prisoners,History,N) ->
+      {NewHistory}=doOneRun(Prisoners,History),
+      iterate(Prisoners,NewHistory,N-1).
 
 % executes each interaction between prisoners once
--spec doOneRun(list(), list(), list())->none().
-doOneRun([],Summary,History)->
-      {Summary,History};
-doOneRun([First|Rest],Summary,History) ->
-      {NewSummary,NewHistory}=doOnce(First,Rest,Summary,History),
-      doOneRun(Rest,NewSummary,NewHistory).
+-spec doOneRun(list(), list())->none().
+doOneRun([],History)->
+      {History};
+doOneRun([First|Rest],History) ->
+      {NewHistory}=doOnce(First,Rest,History),
+      doOneRun(Rest,NewHistory).
 
 % executes the interaction
--spec doOnce(pid(), list(), list(), list())->none().
-doOnce(_,[],Summary,History)->
-      {Summary,History};
-doOnce(Agent,[OtherAgent|Rest],Summary,History) ->
+-spec doOnce(pid(), list(), list())->none().
+doOnce(_,[],History)->
+      {History};
+doOnce(Agent,[OtherAgent|Rest],History) ->
       Agent!{self(),name},
       receive
             {Agent,name,MyName}->
@@ -96,23 +104,20 @@ doOnce(Agent,[OtherAgent|Rest],Summary,History) ->
       end,
       OtherAgent!{self(),result,MyChoice},
       Agent!{self(),result,OtherChoice},
-      NewSummary = recordScore({MyChoice, OtherChoice},MyName, Summary, []),
-      NewerSummary = recordScore({OtherChoice, MyChoice},OtherName, NewSummary, []),
-      doOnce(Agent,Rest,NewerSummary,[{MyName,MyChoice,OtherName,OtherChoice}|History]).
+      recordScore({MyChoice, OtherChoice},MyName),
+      recordScore({OtherChoice, MyChoice},OtherName),
+      doOnce(Agent,Rest,[{MyName,MyChoice,OtherName,OtherChoice}|History]).
 
 % Filters the summary list and calculates the sentance
--spec recordScore(tuple(), atom(), list(), list())->list().
-recordScore(CurrentInteraction, TheName, [], [])->
-      MyPrisonSentance = calculateSentence(CurrentInteraction, 0),
-      [{TheName,MyPrisonSentance}];
-recordScore(CurrentInteraction, TheName, [], Summary)->
-      MyPrisonSentance = calculateSentence(CurrentInteraction, 0),
-      [{TheName,MyPrisonSentance}|Summary];
-recordScore(CurrentInteraction, TheName, [{PrisonerName, PrisonSentance}|Rest], Accumulator) when PrisonerName == TheName->
-      MyPrisonSentance = calculateSentence(CurrentInteraction, PrisonSentance),
-      [{TheName,MyPrisonSentance}|lists:append(Accumulator, Rest)];
-recordScore(CurrentInteraction, TheName, [First|Rest], Accumulator)->
-      recordScore(CurrentInteraction, TheName, Rest, [First|Accumulator]).
+-spec recordScore(tuple(), atom()) -> none().
+recordScore(CurrentInteraction, TheName)->
+      case ets:lookup(summary, TheName) of
+            [] ->
+                  ets:insert(summary, {TheName, calculateSentence(CurrentInteraction, 0)});
+            [{Name, PrisonSentance}] ->
+                  ets:delete(summary, Name),
+                  ets:insert(summary, {Name, calculateSentence(CurrentInteraction, PrisonSentance)})
+      end.
 
 % Calculates the length of the sentence
 -spec calculateSentence(tuple(), integer())->integer().
