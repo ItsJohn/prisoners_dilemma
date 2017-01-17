@@ -1,11 +1,11 @@
 -module(prisoner).
--export([create/3, getName/1, getStrategy/1, getState/1, prisoner/1]).
+-export([create/3, getName/1, getStrategy/1, getState/1]).
+-include_lib("eunit/include/eunit.hrl").
 
 % creates a prisoner
 -spec create(atom(), atom(), list())->pid().
 create(Name,Strategy,State)->
-      PID=spawn(?MODULE, prisoner, [{Name,Strategy,State}]),
-      PID.
+      spawn(fun() -> prisoner({Name,Strategy,State}) end).
 
 % retrieves the name of the prisoner
 -spec getName(pid())->atom().
@@ -123,3 +123,90 @@ filterOpponent(OpponentName, State) ->
                         false
             end
       end, State).
+
+
+%%%%%%%%%%%%%%%%%%%%
+%                        Tests                         %
+%%%%%%%%%%%%%%%%%%%%
+
+
+prisoner_name_test() ->
+      PID = create(y,coop,[]),
+      PID!{self(), name},
+      receive
+            {PID, name, Name} ->
+                  ?assert(y=:=Name)
+      end.
+
+
+prisoner_stategy_test() ->
+      PID = create(y,random,[]),
+      PID!{self(), strategy},
+      receive
+            {PID, strategy, Strategy} ->
+                  ?assert(random=:=Strategy)
+      end.
+
+
+prisoner_state_test() ->
+      PID = create(y,coop,[{x,coop,defect},{a,defect,defect},{b,coop,coop}]),
+      PID!{self(), state},
+      receive
+            {PID, state, State} ->
+                  ?assert([{x,coop,defect},{a,defect,defect},{b,coop,coop}]=:=State)
+      end.
+
+
+% Strategy Tests
+always_coop_test() ->
+      PID = create(y,coop,[{x,coop,defect}]),
+      PID!{self(), choice, x},
+      receive
+            {PID, choice, Choice} ->
+                  ?assert(coop=:=Choice)
+      end.
+
+
+always_defect_test() ->
+      PID = create(y,defect,[{x,defect,defect}]),
+      PID!{self(), choice, x},
+      receive
+            {PID, choice, Choice} ->
+                  ?assert(defect=:=Choice)
+      end.
+
+
+titForTat_test() ->
+      ?assert(coop=:=titForTat([{x,coop,coop}, {x,coop,coop}, {x,coop,coop}, {x,coop,coop}])).
+titForTat_second_test() ->
+      ?assert(defect=:=titForTat([{x,defect,coop}, {x,defect,coop}, {x,coop,coop}, {x,coop,coop}])).
+titForTat_third_test() ->
+      ?assert(coop=:=titForTat([])).
+
+
+% random_test() ->
+%       ?assert(coop=:=random())
+
+
+grudger_test() ->
+      ?assert(coop=:=grudger([{x,coop,coop}, {x,coop,coop}, {x,coop,coop}, {x,coop,coop}])).
+grudger_second_test() ->
+      ?assert(defect=:=grudger([{x,coop,coop}, {x,defect,coop}, {x,coop,coop}, {x,coop,coop}])).
+grudger_third_test() ->
+      ?assert(coop=:=grudger([])).
+
+
+suspiciousTitForTat_test() ->
+      ?assert(coop=:=suspiciousTitForTat([{x,coop,coop}, {x,coop,coop}, {x,coop,coop}, {x,coop,coop}])).
+suspiciousTitForTat_second_test() ->
+      ?assert(defect=:=suspiciousTitForTat([{x,defect,coop}, {x,coop,defect}])).
+suspiciousTitForTat_three_test() ->
+      ?assert(defect=:=suspiciousTitForTat([])).
+
+
+filterOpponent_test() ->
+      State = prisoner:filterOpponent(x, [{x, coop, defect}, {a, defect, defect}, {x, coop, coop}, {y, coop, defect}]),
+      ?assert([{x,coop,defect},{x,coop,coop}]=:=State).
+filterOpponent_second_test() ->
+      State = prisoner:filterOpponent(b, [{x, coop, defect}, {a, defect, defect}, {x, coop, coop}, {y, coop, defect}]),
+      ?assert([]=:=State).
