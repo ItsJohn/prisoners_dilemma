@@ -77,7 +77,7 @@ supervisor(PrisonerList)->
       end.
 
 % Checks if a prisoner has finished all the iterations, if not make it continue
--spec checkIfFinished(none()) -> none().
+-spec checkIfFinished() -> none().
 checkIfFinished() ->
       MyID = self(),
       receive
@@ -186,6 +186,42 @@ filterPrisoners_second_test() ->
       ?assert([{x, self()}]=:=filterPrisoners([{x, self(), []}], [])).
 
 
+createEtsFromList_test() ->
+      checkForTable(summary),
+      createEtsFromList(summary, [{x, 27}, {y, 42}]),
+      ?assert(2=:=length(ets:tab2list(summary))).
+createEtsFromList_second_test() ->
+      checkForTable(history),
+      createEtsFromList(history, [{x, coop, y, defect}]),
+      ?assert(1=:=length(ets:tab2list(history))).
+
+
+add_test() ->
+      stopTable(history),
+      stopTable(summary),
+      W = start({[],[]}),
+      P1 = prisoner:create(a, coop,[]),
+      ?assert(1=:=add(W, P1)).
+
+
+stats_test() ->
+      P1 = prisoner:create(a, coop,[]),
+      P2 = prisoner:create(b, defect,[]),
+      stopTable(history),
+      stopTable(summary),
+      W = start({[],[]}),
+      add(W, P1),
+      add(W, P2),
+      run(W, 5),
+      ?assert([{a,0,P1},{b,18,P2}]=:=stats(W)).
+
+
+run_test() ->
+      runGame(),
+      ?assert(6=:=length(ets:tab2list(history))).
+      ?debugFmt("Function fun1 starting...~p~n", [length(ets:tab2list(history))]).
+
+
 recordScore_test() ->
       checkForTable(summary),
       recordScore({coop,defect}, x, self()),
@@ -276,6 +312,17 @@ createPrisoners() ->
       add(W, P3),
       add(W, P4),
       W.
+
+runGame() ->
+      stopTable(history),
+      stopTable(summary),
+      W = start({[],[]}),
+      P1 = prisoner:create(a, coop,[]),
+      P2 = prisoner:create(b, defect,[]),
+      add(W, P1),
+      add(W, P2),
+      run(W, 5).
+
 
 
 test_prisoner() ->

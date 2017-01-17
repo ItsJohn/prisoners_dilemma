@@ -13,10 +13,20 @@ First make sure you have Erlang installed
 * Type `erl` to open the Erlang console
 * `c(warden,[{outdir, "beam/"}]).` to compile the warden file
 * `c(prisoner,[{outdir, "beam/"}]).` to compile the prisoner file
-* `P1 = prisoner:create(john,random,[]).` to create the first prisoner, change `john` to any name and `random` to any strategy mentioned above
-* `P2 = prisoner:create(fred,titForTat,[]).` to create another prisoner
+* `P1 = prisoner:create(nameA,random,[]).` to create the first prisoner, change `nameA` to any name and `random` to any strategy mentioned above
+* `P2 = prisoner:create(nameB,titForTat,[]).` to create another prisoner
 * `W = warden:start({[],[]}).` to start the warden
 * `warden:add(W, P1).` adds the warden as the supervisor for the first prisoner
 * `warden:add(W, P2).` adds the warden as the supervisor for the second prisoner
 * `warden:run(W, 3).` to get the warden to ask each prisoner to whether they co-operate or betray the other prisoner `3` times
 * `warden:stats(W).` to display the results
+
+## Running Tests
+To run the prisoners tests:
+* `c(prisoner,[{outdir, "beam/"}]).` to compile the prisoner file
+* `prisoner:test().` to run the tests
+
+To run the warden tests:
+* `c(prisoner,[{outdir, "beam/"}]).` to compile the prisoner file
+* `c(warden,[{outdir, "beam/"}]).` to compile the warden file
+* `warden:test().` to run the tests
