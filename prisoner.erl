@@ -184,8 +184,13 @@ titForTat_third_test() ->
       ?assert(coop=:=titForTat([])).
 
 
-% random_test() ->
-%       ?assert(coop=:=random())
+random_test() ->
+      case random() of
+            coop ->
+                  ?assert(coop=:=coop);
+            defect ->
+                  ?assert(defect=:=defect)
+      end.
 
 
 grudger_test() ->
