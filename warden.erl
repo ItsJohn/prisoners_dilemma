@@ -11,6 +11,8 @@ start({SummaryScore, History})->
       createEtsFromList(history, History),
       spawn(fun() -> supervisor([]) end).
 
+% Creates an ETS table from a given list
+-spec createEtsFromList(atom(), list()) -> none().
 createEtsFromList(_, []) ->
       ok;
 createEtsFromList(TableName, [First|Rest]) ->
@@ -26,7 +28,7 @@ add(SupervisorPID,PID)->
                   Total
       end.
 
-%
+% Filters the prisoner list to only include PID and Name
 -spec filterPrisoners(list(), list())  -> list().
 filterPrisoners([], Enemies) ->
       Enemies;
@@ -40,10 +42,10 @@ stats(SupervisorPID)->
       SupervisorPID!{self(),stats},
       receive
             {SupervisorPID,stats, Summary} ->
-                  lists:keysort(2, Summary)
+                  lists:keysort(2, Summary) % sorts list
       end.
 
-% runs the interactions with each prisoner N times
+% asks the supervisor to run the interactions N times
 -spec run(pid(), integer())->atom().
 run(SupervisorPID,Iterations)->
       SupervisorPID!{self(),run,Iterations},
@@ -63,55 +65,57 @@ supervisor(PrisonerList)->
                               ok
                   end,
                   Sender!{self(),done,length(PrisonerList)+1},
-                  supervisor([{PID, Name, filterPrisoners(PrisonerList, [])}|PrisonerList]);
+                  supervisor([{PID, Name, filterPrisoners(PrisonerList, [])}|PrisonerList]); % adds prisoner and adds the prisoners they have to  interact with
             {Sender,stats} ->
-                  Sender!{self(), stats, ets:tab2list(summary)},
+                  Sender!{self(), stats, ets:tab2list(summary)}, % creates a list from ets
                   supervisor(PrisonerList);
             {Sender,run,Count} ->
-                  StartTime = erlang:timestamp(),
-                  iterate(PrisonerList,Count, Count),
-                  EndTime = erlang:timestamp(),
-                  Microseconds = timer:now_diff(EndTime,StartTime),
-                  Seconds = Microseconds /1000000,
-                  io:format("~p~n", [Seconds]),
+                  PID=spawn(fun() -> checkIfFinished() end),
+                  seperatePrisoner(PrisonerList, 0, PID, Count),
                   Sender!{self(),done},
                   supervisor(PrisonerList)
       end.
 
-% runs the interaction between prisoners N times
--spec iterate(list(), integer(), integer())->none().
-iterate(_,0, _)->
-      ok;
-iterate(Prisoners,N, NoOfGames) ->
-      doOneRun(Prisoners, 0, NoOfGames),
-      iterate(Prisoners,N-1, NoOfGames).
+% Checks if a prisoner has finished all the iterations, if not make it continue
+-spec checkIfFinished(none()) -> none().
+checkIfFinished() ->
+      MyID = self(),
+      receive
+            {_, done, {ID, 0, _}} ->
+                  ID!{self(), finished},
+                  checkIfFinished();
+            {_, done, {ID, Count, Prisoner}} ->
+                  _=spawn(fun() -> prepareInteraction(ID, Prisoner, 0, MyID, Count - 1, Prisoner) end), % spawns a function without having to export the function
+                  checkIfFinished()
+      end.
 
-% executes each interaction between prisoners once
--spec doOneRun(list(), integer(), integer())->none().
-doOneRun([Prisoner|[]], Acc, NoOfGames)->
+% extracts the prisoner out of the list, spawns a prisoner process
+-spec seperatePrisoner(list(), integer(), pid(), integer())->none().
+seperatePrisoner([Prisoner|[]], Acc, CheckerID, Count)->
       receive
             {_, finished} when Acc == 1->
                   ok;
             {_, finished} ->
-                  doOneRun([Prisoner|[]], Acc - 1, NoOfGames)
+                  seperatePrisoner([Prisoner|[]], Acc - 1, CheckerID, Count) % makes sure all processes are returned
       end;
-doOneRun([Prisoner|Rest], Acc, NoOfGames) ->
+seperatePrisoner([Prisoner|Rest], Acc, CheckerID, Count) ->
       ID = self(),
-      _=spawn(fun() -> doOnce(ID, Prisoner, 0) end),
-      doOneRun(Rest, Acc + 1, NoOfGames).
+      _=spawn(fun() -> prepareInteraction(ID, Prisoner, 0, CheckerID, Count, Prisoner) end),
+      seperatePrisoner(Rest, Acc + 1, CheckerID, Count).
 
--spec doOnce(pid(), tuple(), integer())->none().
-doOnce(ID, {_, _, []}, Acc) ->
+% extracts the prisoners out of enemy list, and spawns process for interaction
+-spec prepareInteraction(pid(), tuple(), integer(), pid(), integer(), tuple())->none().
+prepareInteraction(ID, {_, _, []}, Acc, CheckerID, Count, Prisoner) ->
       receive
             {_, done} when Acc == 1 ->
-                  ID!{self(), finished};
+                  CheckerID!{self(), done, {ID,Count, Prisoner}};
             {_, done} ->
-                  doOnce(ID, {x, y, []}, Acc - 1)
+                  prepareInteraction(ID, {x, y, []}, Acc - 1, CheckerID, Count, Prisoner)
       end;
-doOnce(ID, {PID, Name, [{OID, OtherName}|List]}, Acc) ->
+prepareInteraction(ID, {PID, Name, [{OID, OtherName}|List]}, Acc, CheckerID, Count, Prisoner) ->
       ThisID = self(),
       _ = spawn(fun() -> generateGame(ThisID, PID, Name, OID, OtherName) end),
-      doOnce(ID, {PID, Name, List}, Acc + 1).
+      prepareInteraction(ID, {PID, Name, List}, Acc + 1, CheckerID, Count, Prisoner).
 
 % Creates a game
 -spec generateGame(pid(), pid(), atom(), pid(), atom())->none().
@@ -171,6 +175,11 @@ calculateSentence(CurrentInteraction, MyPrisonSentance) ->
       end.
 
 
+%%%%%%%%%%%%%%%%%%%%
+%                        Tests                         %
+%%%%%%%%%%%%%%%%%%%%
+
+
 filterPrisoners_test() ->
       ?assert([]=:=filterPrisoners([], [])).
 filterPrisoners_second_test() ->
@@ -226,6 +235,17 @@ calculateSentence_fourth_test() ->
       ?assert(10=:=calculateSentence({defect, coop}, 7)).
 
 
+time_test() ->
+      StartTime = erlang:timestamp(),
+      Warden = createPrisoners(),
+      run(Warden, 50),
+      EndTime = erlang:timestamp(),
+      Microseconds = timer:now_diff(EndTime,StartTime),
+      Seconds = Microseconds /1000000,
+      ?debugFmt("Completed in... ~p~n", [Seconds]).
+
+
+
 checkForTable(Table) ->
       case ets:info(Table) of
             undefined ->
@@ -234,6 +254,29 @@ checkForTable(Table) ->
                   ets:delete(Table),
                   ets:new(Table, [named_table, duplicate_bag, public])
       end.
+
+stopTable(Table) ->
+      case ets:info(Table) of
+            undefined ->
+                  ok;
+            _ ->
+                  ets:delete(Table)
+      end.
+
+createPrisoners() ->
+      P1 = prisoner:create(a, coop,[]),
+      P2 = prisoner:create(b,defect,[]),
+      P3 = prisoner:create(c,random,[]),
+      P4 = prisoner:create(d,titForTat,[]),
+      stopTable(history),
+      stopTable(summary),
+      W = start({[],[]}),
+      add(W, P1),
+      add(W, P2),
+      add(W, P3),
+      add(W, P4),
+      W.
+
 
 test_prisoner() ->
       receive
