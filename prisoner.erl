@@ -205,8 +205,8 @@ suspiciousTitForTat_three_test() ->
 
 
 filterOpponent_test() ->
-      State = prisoner:filterOpponent(x, [{x, coop, defect}, {a, defect, defect}, {x, coop, coop}, {y, coop, defect}]),
+      State = filterOpponent(x, [{x, coop, defect}, {a, defect, defect}, {x, coop, coop}, {y, coop, defect}]),
       ?assert([{x,coop,defect},{x,coop,coop}]=:=State).
 filterOpponent_second_test() ->
-      State = prisoner:filterOpponent(b, [{x, coop, defect}, {a, defect, defect}, {x, coop, coop}, {y, coop, defect}]),
+      State = filterOpponent(b, [{x, coop, defect}, {a, defect, defect}, {x, coop, coop}, {y, coop, defect}]),
       ?assert([]=:=State).
