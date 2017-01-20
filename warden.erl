@@ -219,7 +219,6 @@ stats_test() ->
 run_test() ->
       runGame(),
       ?assert(6=:=length(ets:tab2list(history))).
-      ?debugFmt("Function fun1 starting...~p~n", [length(ets:tab2list(history))]).
 
 
 recordScore_test() ->
